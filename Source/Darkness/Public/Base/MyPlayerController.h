@@ -18,12 +18,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Input")
 	void SimulateInputKey(FKey Key, bool bPressed = true);
 
-	/* toggle InGameMenu handler */
-	void OnToggleInGameMenu();
-
-	/*UFUNCTION(BlueprintImplementableEvent, Category = "UI")
-	void ToggleInGameMenu();*/
-
 	/* set god mode cheat */
 	UFUNCTION(exec)
 	void SetGodMode(bool bEnable);
@@ -47,6 +41,8 @@ public:
 	/** Associate a new UPlayer with this PlayerController. */
 	virtual void SetPlayer(UPlayer* Player);
 
+
+	virtual void Possess(APawn* aPawn) final;
 protected:
 
 	/** god mode cheat */
