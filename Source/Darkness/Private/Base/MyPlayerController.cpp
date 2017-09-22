@@ -2,6 +2,10 @@
 
 #include "Darkness.h"
 #include "Darkness/Public/Base/MyPlayerController.h"
+#include "Logging/MessageLog.h"
+
+DEFINE_LOG_CATEGORY(LogPlayerController);
+#define LOCTEXT_NAMESPACE "MyPlayerController"
 
 AMyPlayerController::AMyPlayerController(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
@@ -13,9 +17,6 @@ AMyPlayerController::AMyPlayerController(const FObjectInitializer& ObjectInitial
 void AMyPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-
-	//UI input
-	InputComponent->BindAction("InGameMenu", IE_Pressed, this, &AMyPlayerController::OnToggleInGameMenu);
 }
 
 void AMyPlayerController::PostInitializeComponents()
@@ -58,26 +59,26 @@ void AMyPlayerController::SimulateInputKey(FKey Key, bool bPressed)
 	InputKey(Key, bPressed ? IE_Pressed : IE_Released, 1, false);
 }
 
-void AMyPlayerController::OnToggleInGameMenu()
-{
-	if (GEngine->GameViewport == nullptr)
-	{
-		return;
-	}
-	UWorld* GameWorld = GEngine->GameViewport->GetWorld();
-
-	for (auto It = GameWorld->GetControllerIterator(); It; ++It)
-	{
-		AMyPlayerController* Con = Cast<AMyPlayerController>(*It);
-		if (Con && Con->IsPaused())
-		{
-			return;
-		}
-	}
-
-	// if no one's paused, pause - TODO: Send off event for opening the pause menu
-	//ToggleInGameMenu();
-}
+//void AMyPlayerController::OnToggleInGameMenu()
+//{
+//	if (GEngine->GameViewport == nullptr)
+//	{
+//		return;
+//	}
+//	UWorld* GameWorld = GEngine->GameViewport->GetWorld();
+//
+//	for (auto It = GameWorld->GetControllerIterator(); It; ++It)
+//	{
+//		AMyPlayerController* Con = Cast<AMyPlayerController>(*It);
+//		if (Con && Con->IsPaused())
+//		{
+//			return;
+//		}
+//	}
+//
+//	// if no one's paused, pause - TODO: Send off event for opening the pause menu
+//	//ToggleInGameMenu();
+//}
 
 void AMyPlayerController::SetGodMode(bool bEnable)
 {
@@ -129,4 +130,69 @@ void AMyPlayerController::SetPlayer(UPlayer * InPlayer)
 void AMyPlayerController::UpdateSaveFileOnGameEnd(bool bIsWinner)
 {
 
+}
+
+void AMyPlayerController::Possess(APawn * PawnToPossess)
+{
+	if (!HasAuthority())
+	{
+		FMessageLog("PIE").Warning(FText::Format(
+			LOCTEXT("PlayerControllerPossessAuthorityOnly", "Possess function should only be used by the network authority for {0}"),
+			FText::FromName(GetFName())
+		));
+		UE_LOG(LogPlayerController, Warning, TEXT("Trying to possess %s without network authority! Request will be ignored."), *GetNameSafe(PawnToPossess));
+		return;
+	}
+
+	if (PawnToPossess != NULL &&
+		(PlayerState == NULL || !PlayerState->bOnlySpectator))
+	{
+		if (GetPawn() && GetPawn() != PawnToPossess)
+		{
+			UnPossess();
+		}
+
+		if (PawnToPossess->Controller != NULL)
+		{
+			PawnToPossess->Controller->UnPossess();
+		}
+
+		PawnToPossess->PossessedBy(this);
+
+		// update rotation to match possessed pawn's rotation
+		SetControlRotation(PawnToPossess->GetActorRotation());
+
+		SetPawn(PawnToPossess);
+		check(GetPawn() != NULL);
+
+		if (GetPawn() && GetPawn()->PrimaryActorTick.bStartWithTickEnabled)
+		{
+			GetPawn()->SetActorTickEnabled(true);
+		}
+
+		INetworkPredictionInterface* NetworkPredictionInterface = GetPawn() ? Cast<INetworkPredictionInterface>(GetPawn()->GetMovementComponent()) : NULL;
+		if (NetworkPredictionInterface)
+		{
+			NetworkPredictionInterface->ResetPredictionData_Server();
+		}
+
+		AcknowledgedPawn = NULL;
+
+		// Local PCs will have the Restart() triggered right away in ClientRestart (via PawnClientRestart()), but the server should call Restart() locally for remote PCs.
+		// We're really just trying to avoid calling Restart() multiple times.
+		if (!IsLocalPlayerController())
+		{
+			GetPawn()->Restart();
+		}
+
+		ClientRestart(GetPawn());
+
+		ChangeState(NAME_Playing);
+		if (bAutoManageActiveCameraTarget)
+		{
+			AutoManageActiveCameraTarget(GetPawn());
+			ResetCameraMode();
+		}
+		UpdateNavigationComponents();
+	}
 }

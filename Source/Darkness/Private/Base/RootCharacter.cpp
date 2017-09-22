@@ -226,3 +226,10 @@ bool ARootCharacter::IsEnemyFor(AController* TestPC) const
 
 	return bIsEnemy;
 }
+
+void ARootCharacter::Restart()
+{
+	Super::Restart();
+	//UCharacterMovementComponent* movementComponent = (UCharacterMovementComponent*)GetMovementComponent();
+	//GetMovementComponent().
+}
