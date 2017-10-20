@@ -110,6 +110,8 @@ public:
 
 	virtual void FellOutOfWorld(const class UDamageType& dmgType) override;
 
+	virtual void Restart() override;
+
 protected:
 
 	virtual void OnDeath();
